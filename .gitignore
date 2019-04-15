@@ -1,0 +1,7 @@
+*.DS_Store
+*tmp/
+*.playground
+*.cov
+deps/usr/build/
+docs/build
+docs/site
