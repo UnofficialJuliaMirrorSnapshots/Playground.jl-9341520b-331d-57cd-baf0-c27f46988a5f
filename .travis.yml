@@ -1,0 +1,61 @@
+language: julia
+os:
+- osx
+- linux
+julia:
+- 0.5
+- nightly
+addons:
+  apt:
+    sources:
+      - ubuntu-toolchain-r-test
+    packages:
+      - gcc-5
+notifications:
+  email: false
+matrix:
+  fast_finish: true
+  allow_failures:
+  - julia: nightly
+before_install:
+- if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
+    sudo add-apt-repository ppa:staticfloat/julia-deps -y;
+    sudo apt-get update -qq -y;
+    mkdir -p $HOME/bin;
+    ln -s /usr/bin/gcc-5 $HOME/bin/gcc;
+    ln -s /usr/bin/gcc-5 $HOME/bin/x86_64-linux-gnu-gcc;
+    gcc --version;
+  fi
+script:
+- if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
+# initial clone so that we install the dependencies correctly, but this copies the pwd
+- julia -e 'Pkg.clone("https://github.com/dhoegh/BuildExecutable.jl"); Pkg.build("BuildExecutable"); Pkg.clone(pwd())'
+# now build playground
+- julia --depwarn=no -e 'ENV["PLAYGROUND_INSTALL"] = true; Pkg.build("Playground");
+  Pkg.test("Playground";  coverage=true)'
+- ~/.playground/bin/playground list
+- rm ~/.playground/bin/playground
+- julia -e 'ENV["PLAYGROUND_INSTALL"] = true; ENV["PLAYGROUND_BIN_EXEC"] = true; Pkg.build("Playground")'
+- ~/.playground/bin/playground list
+after_success:
+- julia -e 'cd(Pkg.dir("Playground")); Pkg.add("Coverage"); using Coverage; Codecov.submit(process_folder())'
+before_deploy:
+# Assuming skip_cleanup works the README.md and the build directory we want should be under the pwd
+- echo "Attempting to bundle playground..."
+- mkdir -p playground
+- cp -r ./deps/usr/build/* ./playground/
+- tar -czvf "playground-$TRAVIS_OS_NAME.tar.gz" ./playground
+- if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then shasum -a 256 --binary "playground-osx.tar.gz" > "SHA256SUM-osx.asc"; fi
+- if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sha256sum --binary "playground-linux.tar.gz" > "SHA256SUM-linux.asc"; fi
+deploy:
+  provider: releases
+  api_key:
+    secure: VXiNu6Z4IDq4QIzCBadfA8Z0HXfyJhoLhrGsftGEO2pRDgzS0wogJxOIQ6s7vtfg/PmgiT4hzVFb5XSmQdTWZ1LxB83J8AXkd+YswNvJuWqqYwUSnsVybE37n7EuQTGS7c+IzD6pe3G+hwm/6sHwCeXx4wIugBYvEigixfY3sAI=
+  file:
+  - "playground-$TRAVIS_OS_NAME.tar.gz"
+  - "SHA256SUM-$TRAVIS_OS_NAME.asc"
+  skip_cleanup: true
+  on:
+    tags: true
+    all_branches: true
+    repo: rofinn/Playground.jl

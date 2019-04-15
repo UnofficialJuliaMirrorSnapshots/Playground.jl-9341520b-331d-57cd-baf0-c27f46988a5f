@@ -1,0 +1,4 @@
+#!/usr/bin/env julia
+
+import Playground
+Playground.main(ARGS)
